@@ -109,8 +109,9 @@ bool    process_record_user(uint16_t keycode, keyrecord_t *record) {
         case VLK_TOG:
             if (record->event.pressed) {
                 Jelocikey_toggle =! Jelocikey_toggle;
-            }
-            else {
+                rgb_matrix_set_speed_noeeprom(0);
+                currentWPM = 0;
+            } else {
                 rgb_matrix_set_speed_noeeprom(127);
             }
             return false;
@@ -131,12 +132,16 @@ bool    process_record_user(uint16_t keycode, keyrecord_t *record) {
                     printf("KeyDown -> True\n");
                     KeyDown = true;
 
-                    currentWPM = currentWPM + 5;
-                    printf("Increasing speed by %d\n", 5 + currentWPM * (255 / currentWPM));
+                    //Different implementations of WPM, using a linear equation
+                    //currentWPM = currentWPM + 3;
+                    //Using QMK default WPM estimator
+                    currentWPM = 2 * get_current_wpm();
+
+                    printf("Current QMK WPM -> %d\n", get_current_wpm());
+                    printf("Increasing speed to %d\n", currentWPM);
                     //currentWPM = currentWPM + 2 * currentWPM;
                     if (currentWPM > 255) { currentWPM = 255; }
-                    printf("Increasing speed -> %d\n", currentWPM);
-
+                    printf("Speed -> %d\n", currentWPM);
 
                     rgb_matrix_set_speed_noeeprom(currentWPM);
                     consecutive_key = true;
@@ -165,34 +170,40 @@ void matrix_scan_user(void) {
     if(Jelocikey_toggle && currentWPM > 1){
         if(consecutive_key){
 
-            if (timer_elapsed(falloff_timer) > 2000) {  // i.e Two keys are not struck within 2 seconds; not consecutive
-                falloff_timer      = 0;
-                timer_clear();
-                printf("Consecutive keys\n");
-                consecutive_key = false;
-                deccelerating    = true;
-            }
-
-        //consecutive_key = false;
-        } else {
-            if (timer_elapsed(falloff_timer) > (1020 * 255 / currentWPM) && deccelerating) {  // i.e Two keys are not struck within 1 seconds; not consecutive
-                falloff_timer      = 0;
-                timer_clear();
-
-                currentWPM -= 40;
-                if (currentWPM < 1) {
-                    currentWPM = 1;
-                    deccelerating = false;
+            //2 seconds timer to press another key otherwise slowing down
+                if (timer_elapsed(falloff_timer) > 2000) {  // i.e Two keys are not struck within 2 seconds; not consecutive
+                    falloff_timer      = 0;
+                    timer_clear();
+                    printf("Consecutive keys\n");
+                    consecutive_key = false;
+                    deccelerating    = true;
                 }
-                printf("Decreasing speed -> %d\n", currentWPM);
-                printf("Time to decrease -> %d\n", (1000 * 255 / currentWPM));
 
-                rgb_matrix_set_speed_noeeprom(currentWPM);
-                //rgb_matrix_decrease_speed_noeeprom();
-                // rgb_matrix_decrease_speed();
-            }
+
+        } else if(deccelerating) {
+
+                if (timer_elapsed(falloff_timer) > (1020 * 255 / currentWPM) && deccelerating) {  // i.e Two keys are not struck within 1 seconds; not consecutive
+                    falloff_timer      = 0;
+                    timer_clear();
+
+                    currentWPM -= 40;
+                    if (currentWPM < 0) {
+                        currentWPM = 0;
+                        deccelerating = false;
+                    }
+                    printf("Decreasing speed -> %d\n", currentWPM);
+                    printf("Time to decrease -> %d\n", (1000 * 255 / currentWPM));
+
+                    rgb_matrix_set_speed_noeeprom(currentWPM);
+                }
+
         }
     }
+
+
+
+
+
 }
 
 layer_state_t layer_state_setuser(layer_state_t state) {
